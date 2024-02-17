@@ -22,18 +22,38 @@ const io = new Server(expressServer, {
     origin:
       process.env.NODE_ENV === "production"
         ? false
-        : ["http://localhost:5500", "http://127.0.0.1:5500"],
+        : ["http://localhost:3500", "http://127.0.0.1:3500"],
   },
 });
 
 io.on("connection", (socket) => {
   console.log(`User ${socket.id} connected`);
 
+  // Upon connection - only to User
+  socket.emit("message", "Welcome to Chat App!");
+
+  socket.broadcast.emit(
+    "message",
+    `User ${socket.id.substring(0, 5)} connected`,
+  );
+
+  // listening for a message event
   socket.on("message", (data) => {
     console.log(data);
     io.emit("message", `${socket.id.substring(0, 5)}: ${data}`);
   });
-});
 
-// httpServer.listen(3500, () => console.log("listening on port 3500"));
+  // when user disconnect - to all other users
+  socket.on("disconnect", () => {
+    socket.broadcast.emit(
+      "message",
+      `User ${socket.id.substring(0, 5)} disconnected`,
+    );
+  });
+
+  // listen for activity
+  socket.on("activity", (name) => {
+    socket.broadcast.emit("activity", name);
+  });
+});
 
