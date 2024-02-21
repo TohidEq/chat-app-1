@@ -1,6 +1,5 @@
 import express from "express";
 import { Server } from "socket.io";
-
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -31,24 +30,20 @@ const io = new Server(expressServer, {
     origin:
       process.env.NODE_ENV === "production"
         ? false
-        : ["http://localhost:3500", "http://127.0.0.1:3500"],
+        : ["http://localhost:5500", "http://127.0.0.1:5500"],
   },
 });
 
 io.on("connection", (socket) => {
   console.log(`User ${socket.id} connected`);
 
-  // Upon connection - only to User
+  // Upon connection - only to user
   socket.emit("message", buildMsg(ADMIN, "Welcome to Chat App!"));
-  // Upon connection - to all others
-  socket.broadcast.emit(
-    "message",
-    `User ${socket.id.substring(0, 5)} connected`,
-  );
 
   socket.on("enterRoom", ({ name, room }) => {
-    // leave prev room
-    const prevRoom = getUser(socket.id);
+    // leave previous room
+    const prevRoom = getUser(socket.id)?.room;
+
     if (prevRoom) {
       socket.leave(prevRoom);
       io.to(prevRoom).emit(
@@ -56,8 +51,10 @@ io.on("connection", (socket) => {
         buildMsg(ADMIN, `${name} has left the room`),
       );
     }
+
     const user = activateUser(socket.id, name, room);
-    // Cannot update prev room users list until after the state update in activate user
+
+    // Cannot update previous room users list until after the state update in activate user
     if (prevRoom) {
       io.to(prevRoom).emit("userList", {
         users: getUsersInRoom(prevRoom),
@@ -84,30 +81,35 @@ io.on("connection", (socket) => {
     });
 
     // Update rooms list for everyone
-    io.emit("roomsList", {
-      rooms: getAllActivateRooms(),
+    io.emit("roomList", {
+      rooms: getAllActiveRooms(),
     });
   });
 
-  // when user disconnect - to all other users
+  // When user disconnects - to all others
   socket.on("disconnect", () => {
     const user = getUser(socket.id);
     userLeavesApp(socket.id);
+
     if (user) {
       io.to(user.room).emit(
         "message",
         buildMsg(ADMIN, `${user.name} has left the room`),
       );
+
       io.to(user.room).emit("userList", {
         users: getUsersInRoom(user.room),
       });
-      io.emit("roomList");
+
+      io.emit("roomList", {
+        rooms: getAllActiveRooms(),
+      });
     }
 
     console.log(`User ${socket.id} disconnected`);
   });
 
-  // listening for a message event
+  // Listening for a message event
   socket.on("message", ({ name, text }) => {
     const room = getUser(socket.id)?.room;
     if (room) {
@@ -115,7 +117,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // listen for activity
+  // Listen for activity
   socket.on("activity", (name) => {
     const room = getUser(socket.id)?.room;
     if (room) {
@@ -136,7 +138,7 @@ function buildMsg(name, text) {
   };
 }
 
-// User function
+// User functions
 function activateUser(id, name, room) {
   const user = { id, name, room };
   UsersState.setUsers([
@@ -151,14 +153,13 @@ function userLeavesApp(id) {
 }
 
 function getUser(id) {
-  return UsersState.users.filter((user) => user.id === id);
+  return UsersState.users.find((user) => user.id === id);
 }
 
 function getUsersInRoom(room) {
   return UsersState.users.filter((user) => user.room === room);
 }
 
-function getAllActivateRooms() {
-  // no duplicate :)
+function getAllActiveRooms() {
   return Array.from(new Set(UsersState.users.map((user) => user.room)));
 }
